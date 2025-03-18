@@ -3,85 +3,106 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Data.SqlClient;
 using System.Text;
+DbInitializer initializer = new DbInitializer();
+
+/*initializer.AddData("Milk", "Anatoli", 3);
+initializer.AddData("Tesla", "Daniel Petkov", 2);
+initializer.AddData("Winter Tyres", "Simeon", 3);*/
+initializer.QueryMethod();
 
 
-SqlConnection conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=master; Trusted_Connection=True; TrustServerCertificate = True");
-void CreateDb()
+
+public class DbInitializer
 {
-    string newstr = "SELECT database_id FROM sys.databases WHERE Name = 'myDataBase'";  
-    SqlCommand cmd1 = new SqlCommand(newstr, conn);
-  //  cmd1.ExecuteScalar();
-
-
-
-
-
-    if (cmd1.ExecuteScalar()!=null)
+    private SqlConnection conn;
+    public void CreateIfNotExistsDb()
     {
-        string cmd = "CREATE DATABASE myDataBase";
+        conn=new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database={0}; Trusted_Connection=True; TrustServerCertificate = True");
         conn.Open();
-        SqlCommand comm = new SqlCommand(cmd, conn);
-        comm.ExecuteNonQuery();
+        string newstr = "SELECT database_id FROM sys.databases WHERE Name = 'myDataBase'";
+        SqlCommand cmd1 = new SqlCommand(newstr, conn);
+
+        if (cmd1.ExecuteScalar() != null)
+        {
+            string cmd = "CREATE DATABASE myDataBase";
+            SqlCommand comm = new SqlCommand(cmd, conn);
+            comm.ExecuteNonQuery();
+        }
+        conn.Close();
+    }
+    public void CreateColumns()
+    {
+        string colcomand1 = @"
+            create table Products( +
+            pr_Id int PRIMARY KEY IDENTITY (1,1),
+            pr_name varchar(20) 
+            )
+            
+            create table Buyers( +
+            b_Id int PRIMARY KEY IDENTITY (1,1),
+            b_name varchar(20)
+            
+            create table Sales(
+            s_id int PRIMARY KEY IDENTITY (1,1),
+            pr_Id int FOREIGN KEY REFERENCES Products(pr_Id),
+            b_Id int FOREIGN KEY REFERENCES Buyers(b_Id)
+            )";
+        conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
+        conn.Open();
+        SqlCommand comm1 = new SqlCommand(colcomand1, conn);
+        comm1.ExecuteNonQuery();
         conn.Close();
     }
 
 
-
-}
-
-//  CreateDb();
-
-
-
-void CreateColumns()
-{
-    string colcomand1 = "create table Products(\r\npr_Id int PRIMARY KEY IDENTITY (1,1),\r\npr_name varchar(20)\r\n)\r\n\r\n\r\ncreate table Buyers(\r\nb_Id int PRIMARY KEY IDENTITY (1,1),\r\nb_name varchar(20)\r\n)\r\n\r\n\r\ncreate table Sales(\r\ns_id int PRIMARY KEY IDENTITY (1,1),\r\npr_Id int FOREIGN KEY REFERENCES Products(pr_Id),\r\nb_Id int FOREIGN KEY REFERENCES Buyers(b_Id)\r\n)";
-    conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
-    conn.Open();
-    SqlCommand comm1 = new SqlCommand(colcomand1, conn);
-    comm1.ExecuteNonQuery();
-    conn.Close();
-}
-//CreateColumns();
-
-void AddData()
-{
-    string command = "INSERT into Products(pr_name)\r\n" +
-        "VALUES('Milk'), ('Ball'), ('Winter Tires')\r\n\r\n" +
-        "INSERT INTO Buyers(b_name)\r\n" +
-        "VALUES ('Martin'), ('Ivailo'), ('Greskomers')\r\n\r\n" +
-        "INSERT INTO Sales(pr_Id, b_Id)\r\n" +
-        "VALUES(1,2), (2,2), (3, 1), (3,2), (3,3), (1,1)";
-    conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
-    conn.Open();
-    SqlCommand c = new SqlCommand(command, conn);
-    c.ExecuteNonQuery();
-    conn.Close();
-}
-//AddData();
-
-void QueryMethod()
-{
-    string query = "SELECT p.pr_name AS [ProductName], COUNT(b_id) AS salesCount\r\n" +
-        "from Sales AS s JOIN Products AS p ON s.pr_Id = p.pr_Id\r\nGROUP BY p.pr_name";
-    conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
-    conn.Open();
-    SqlCommand m = new SqlCommand(query, conn);
-    SqlDataReader r = m.ExecuteReader();
-    StringBuilder str = new StringBuilder();
-    while (r.Read())
+    public  void AddData(string productName, string buyerName, int fk)
     {
-        string  bId = r["ProductName"].ToString();
-        int Pid = int.Parse(r["salesCount"].ToString());
-        
-        str.AppendLine($"{Pid} - {bId}");
-
+        conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
+        conn.Open();
+        using (SqlCommand cmd = new SqlCommand(@"INSERT INTO Products(pr_name) VALUES(@productName)", conn))
+        {
+            cmd.Parameters.Add("@productName", SqlDbType.VarChar).Value = productName;
+            cmd.ExecuteNonQuery();
+        }
+        using (SqlCommand cmd1 = new SqlCommand(@"INSERT INTO Buyers(b_name) VALUES (@buyerName)", conn))
+        {
+            cmd1.Parameters.Add("@buyerName", SqlDbType.VarChar).Value = buyerName;
+            cmd1.ExecuteNonQuery();
+        }
+        using (SqlCommand cmd2 = new SqlCommand(@"INSERT INTO Sales(pr_Id, b_Id) VALUES(@pr_Id, @b_Id)", conn))
+        {
+            cmd2.Parameters.Add("@pr_Id", SqlDbType.Int).Value = fk;
+            cmd2.Parameters.Add("@b_Id", SqlDbType.Int).Value = fk;
+            cmd2.ExecuteNonQuery();
+        }
+        conn.Close();
+        // Possible updated version of this code is with the use of the AddWithValue method instead of just Add method.
     }
-    conn.Close();
-    foreach (var st in str.ToString())
+
+
+    public void QueryMethod()
     {
-        Console.WriteLine(st);
+        string query = @"SELECT p.pr_name AS [ProductName], COUNT(b_id) AS salesCount 
+                from Sales AS s 
+                JOIN Products AS p ON s.pr_Id = p.pr_Id
+                GROUP BY p.pr_name";
+        conn = new SqlConnection(@"Server=DESKTOP-OH4KKOB\SQLEXPRESS; Database=myDataBase; Trusted_Connection=True; TrustServerCertificate = True");
+        conn.Open();
+        SqlCommand m = new SqlCommand(query, conn);
+        SqlDataReader r = m.ExecuteReader();
+        StringBuilder str = new StringBuilder();
+        while (r.Read())
+        {
+            string bId = r["ProductName"].ToString();
+            int Pid = int.Parse(r["salesCount"].ToString());
+
+            str.AppendLine($"{Pid} - {bId}");
+
+        }
+        conn.Close();
+        foreach (var st in str.ToString())
+        {
+            Console.WriteLine(st);
+        }
     }
 }
-
-QueryMethod();
